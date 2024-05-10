@@ -14,6 +14,8 @@ from vllm.sequence import ExecuteModelRequest, SamplerOutput
 from vllm.utils import (get_distributed_init_method, get_ip, get_open_port,
                         get_vllm_instance_id, make_async)
 
+from vllm.spec_decode.util import nvtx_range
+
 if ray is not None:
     from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
@@ -175,10 +177,11 @@ class RayGPUExecutor(DistributedGPUExecutor):
     def execute_model(
             self,
             execute_model_req: ExecuteModelRequest) -> List[SamplerOutput]:
-        all_outputs = self._run_workers(
-            "execute_model",
-            driver_kwargs={"execute_model_req": execute_model_req},
-            use_ray_compiled_dag=USE_RAY_COMPILED_DAG)
+        with nvtx_range("gpu_executor.ray_run_workers"):
+            all_outputs = self._run_workers(
+                "execute_model",
+                driver_kwargs={"execute_model_req": execute_model_req},
+                use_ray_compiled_dag=USE_RAY_COMPILED_DAG)
 
         # Only the driver worker returns the sampling results.
         return all_outputs[0]

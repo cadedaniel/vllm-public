@@ -10,6 +10,8 @@ from .parallel_state import (get_cpu_world_group,
                              get_tensor_model_parallel_world_size,
                              is_pynccl_enabled_for_all_reduce)
 
+from vllm.spec_decode.util import nvtx_range
+
 
 def tensor_model_parallel_all_reduce(input_: torch.Tensor) -> torch.Tensor:
     """All-reduce the input tensor across model parallel group.
@@ -165,6 +167,7 @@ def _split_tensor_dict(
     return metadata_list, tensor_list
 
 
+@nvtx_range("broadcast_tensor_dict")
 def broadcast_tensor_dict(
     tensor_dict: Optional[Dict[Any, Union[torch.Tensor, Any]]] = None,
     src: int = 0,

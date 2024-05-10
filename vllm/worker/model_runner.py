@@ -7,6 +7,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from vllm.spec_decode.util import nvtx_range
+
 from vllm.attention import (AttentionMetadata, AttentionMetadataPerStage,
                             get_attn_backend)
 from vllm.attention.backends.flashinfer import FlashInferBackend
@@ -782,29 +784,31 @@ class ModelRunner:
         seq_group_metadata_list: List[SequenceGroupMetadata],
         kv_caches: List[torch.Tensor],
     ) -> Optional[SamplerOutput]:
-        (input_tokens, input_positions, attn_metadata, sampling_metadata,
-         lora_requests, lora_mapping, multi_modal_input
-         ) = self.prepare_input_tensors(seq_group_metadata_list)
 
-        if self.lora_config:
-            self.set_active_loras(lora_requests, lora_mapping)
+        with nvtx_range("model_runner.prepare_inputs"):
+            (input_tokens, input_positions, attn_metadata, sampling_metadata,
+             lora_requests, lora_mapping, multi_modal_input
+             ) = self.prepare_input_tensors(seq_group_metadata_list)
 
-        # Currently cuda graph is only supported by the decode phase.
-        prefill_meta = attn_metadata.prefill_metadata
-        decode_meta = attn_metadata.decode_metadata
-        if prefill_meta is None and decode_meta.use_cuda_graph:
-            graph_batch_size = input_tokens.shape[0]
-            model_executable = self.graph_runners[graph_batch_size]
-        else:
-            model_executable = self.model
-        execute_model_kwargs = {
-            "input_ids": input_tokens,
-            "positions": input_positions,
-            "kv_caches": kv_caches,
-            "attn_metadata": attn_metadata,
-        }
-        if self.vision_language_config:
-            execute_model_kwargs.update({"image_input": multi_modal_input})
+            if self.lora_config:
+                self.set_active_loras(lora_requests, lora_mapping)
+
+            # Currently cuda graph is only supported by the decode phase.
+            prefill_meta = attn_metadata.prefill_metadata
+            decode_meta = attn_metadata.decode_metadata
+            if prefill_meta is None and decode_meta.use_cuda_graph:
+                graph_batch_size = input_tokens.shape[0]
+                model_executable = self.graph_runners[graph_batch_size]
+            else:
+                model_executable = self.model
+            execute_model_kwargs = {
+                "input_ids": input_tokens,
+                "positions": input_positions,
+                "kv_caches": kv_caches,
+                "attn_metadata": attn_metadata,
+            }
+            if self.vision_language_config:
+                execute_model_kwargs.update({"image_input": multi_modal_input})
         hidden_states = model_executable(**execute_model_kwargs)
 
         # Compute the logits.
@@ -814,15 +818,17 @@ class ModelRunner:
         if not self.is_driver_worker:
             return None
 
-        # Sample the next token.
-        output = self.model.sample(
-            logits=logits,
-            sampling_metadata=sampling_metadata,
-        )
+        with nvtx_range("model_runner.sampler"):
+            # Sample the next token.
+            output = self.model.sample(
+                logits=logits,
+                sampling_metadata=sampling_metadata,
+            )
 
         return output
 
     @torch.inference_mode()
+    @nvtx_range("model_runner.profile_run")
     def profile_run(self) -> None:
         # Enable top-k sampling to reflect the accurate memory usage.
         sampling_params = SamplingParams(top_p=0.99, top_k=self.vocab_size - 1)

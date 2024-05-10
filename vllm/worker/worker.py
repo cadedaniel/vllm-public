@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import torch
 import torch.distributed
 
+from vllm.spec_decode.util import nvtx_range
+
 from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoRAConfig,
                          ModelConfig, ParallelConfig, SchedulerConfig,
                          VisionLanguageConfig)
@@ -219,30 +221,32 @@ class Worker(WorkerBase):
         else:
             seq_group_metadata_list = execute_model_req.seq_group_metadata_list
 
-        if self.is_driver_worker:
-            assert seq_group_metadata_list is not None
-            assert execute_model_req is not None
-            num_seq_groups = len(seq_group_metadata_list)
-            blocks_to_swap_in = execute_model_req.blocks_to_swap_in
-            blocks_to_swap_out = execute_model_req.blocks_to_swap_out
-            blocks_to_copy = torch.tensor(execute_model_req.blocks_to_copy,
-                                          device=self.device,
-                                          dtype=torch.int64).view(-1, 2)
-            data: Dict[str, Any] = {
-                "num_seq_groups": num_seq_groups,
-                "blocks_to_swap_in": blocks_to_swap_in,
-                "blocks_to_swap_out": blocks_to_swap_out,
-                "blocks_to_copy": blocks_to_copy,
-            }
-            broadcast_tensor_dict(data, src=0)
-        else:
-            data = broadcast_tensor_dict(src=0)
-            num_seq_groups = data["num_seq_groups"]
-            blocks_to_swap_in = data["blocks_to_swap_in"]
-            blocks_to_swap_out = data["blocks_to_swap_out"]
-            blocks_to_copy = data["blocks_to_copy"]
+        with nvtx_range("worker.prepare"):
+            if self.is_driver_worker:
+                assert seq_group_metadata_list is not None
+                assert execute_model_req is not None
+                num_seq_groups = len(seq_group_metadata_list)
+                blocks_to_swap_in = execute_model_req.blocks_to_swap_in
+                blocks_to_swap_out = execute_model_req.blocks_to_swap_out
+                blocks_to_copy = torch.tensor(execute_model_req.blocks_to_copy,
+                                              device=self.device,
+                                              dtype=torch.int64).view(-1, 2)
+                data: Dict[str, Any] = {
+                    "num_seq_groups": num_seq_groups,
+                    "blocks_to_swap_in": blocks_to_swap_in,
+                    "blocks_to_swap_out": blocks_to_swap_out,
+                    "blocks_to_copy": blocks_to_copy,
+                }
+                broadcast_tensor_dict(data, src=0)
+            else:
+                data = broadcast_tensor_dict(src=0)
+                num_seq_groups = data["num_seq_groups"]
+                blocks_to_swap_in = data["blocks_to_swap_in"]
+                blocks_to_swap_out = data["blocks_to_swap_out"]
+                blocks_to_copy = data["blocks_to_copy"]
 
-        self.cache_swap(blocks_to_swap_in, blocks_to_swap_out, blocks_to_copy)
+        with nvtx_range("worker.cache_swap"):
+            self.cache_swap(blocks_to_swap_in, blocks_to_swap_out, blocks_to_copy)
 
         # If there is no input, we don't need to execute the model.
         if num_seq_groups == 0:

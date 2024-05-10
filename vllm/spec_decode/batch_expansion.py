@@ -38,7 +38,7 @@ class BatchExpansionTop1Scorer(SpeculativeScorer):
         self._device = device
         self._vocab_size = vocab_size
 
-    @nvtx_range("BatchExpansionTop1Scorer.score_proposals")
+    #@nvtx_range("BatchExpansionTop1Scorer.score_proposals")
     def score_proposals(
         self,
         execute_model_req: ExecuteModelRequest,
@@ -61,38 +61,44 @@ class BatchExpansionTop1Scorer(SpeculativeScorer):
                 which sequences were ignored during scoring.
         """
 
-        # TODO(cade) perform this on GPU to remove blocking call.
-        proposal_lens_list = proposals.proposal_lens.tolist()
-        proposal_token_ids_list = proposals.proposal_token_ids.tolist()
+        with nvtx_range("batch_expansion.expand_batch"):
+            # TODO(cade) perform this on GPU to remove blocking call.
+            proposal_lens_list = proposals.proposal_lens.tolist()
+            proposal_token_ids_list = proposals.proposal_token_ids.tolist()
 
-        # Filter the list to ignore -1 proposals.
-        proposal_token_ids_list_without_skips = [
-            proposals for proposals in proposal_token_ids_list
-            if -1 not in proposals
-        ]
+            # Filter the list to ignore -1 proposals.
+            proposal_token_ids_list_without_skips = [
+                proposals for proposals in proposal_token_ids_list
+                if -1 not in proposals
+            ]
 
-        (spec_indices, non_spec_indices, target_seq_group_metadata_list,
-         num_scoring_tokens) = self._expand_batch(
-             seq_group_metadata_list=execute_model_req.seq_group_metadata_list,
-             proposal_token_ids_list=proposal_token_ids_list_without_skips,
-             proposal_lens_list=proposal_lens_list,
-         )
+            (spec_indices, non_spec_indices, target_seq_group_metadata_list,
+             num_scoring_tokens) = self._expand_batch(
+                 seq_group_metadata_list=execute_model_req.seq_group_metadata_list,
+                 proposal_token_ids_list=proposal_token_ids_list_without_skips,
+                 proposal_lens_list=proposal_lens_list,
+             )
 
-        target_sampler_output = self._scorer_worker.execute_model(
-            execute_model_req=execute_model_req.clone(
-                seq_group_metadata_list=target_seq_group_metadata_list, ))
-        assert len(target_sampler_output) == 1, "expected single-step output"
-        target_sampler_output = target_sampler_output[0]
+        with nvtx_range("batch_expansion.clone_target_model_input"):
+            clone = execute_model_req.clone(seq_group_metadata_list=target_seq_group_metadata_list)
 
-        all_tokens, all_probs, spec_logprobs = self._contract_batch(
-            contracted_bs=len(execute_model_req.seq_group_metadata_list),
-            target_sampler_output=target_sampler_output,
-            proposals=proposals,
-            num_scoring_tokens=num_scoring_tokens,
-            non_spec_indices=non_spec_indices,
-            spec_indices=spec_indices,
-            k=execute_model_req.num_lookahead_slots,
-        )
+        with nvtx_range("batch_expansion.target_model_fwd"):
+            target_sampler_output = self._scorer_worker.execute_model(
+                execute_model_req=clone,
+            )
+            assert len(target_sampler_output) == 1, "expected single-step output"
+            target_sampler_output = target_sampler_output[0]
+
+        with nvtx_range("batch_expansion.contract_batch"):
+            all_tokens, all_probs, spec_logprobs = self._contract_batch(
+                contracted_bs=len(execute_model_req.seq_group_metadata_list),
+                target_sampler_output=target_sampler_output,
+                proposals=proposals,
+                num_scoring_tokens=num_scoring_tokens,
+                non_spec_indices=non_spec_indices,
+                spec_indices=spec_indices,
+                k=execute_model_req.num_lookahead_slots,
+            )
 
         return SpeculativeScores(
             probs=all_probs,

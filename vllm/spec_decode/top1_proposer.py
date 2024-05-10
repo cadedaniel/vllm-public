@@ -6,7 +6,7 @@ from vllm.sequence import (ExecuteModelRequest, SamplerOutput,
                            SequenceGroupMetadata)
 from vllm.spec_decode.interfaces import (SpeculativeProposals,
                                          SpeculativeProposer)
-from vllm.spec_decode.util import sampler_output_to_torch
+from vllm.spec_decode.util import sampler_output_to_torch, nvtx_range
 from vllm.worker.worker_base import WorkerBase
 
 
@@ -51,12 +51,14 @@ class Top1Proposer(SpeculativeProposer):
         proposal_len = execute_model_req.num_lookahead_slots
         seq_group_metadata_list = execute_model_req.seq_group_metadata_list
 
-        # Split speculative- and non-speculative- sequences.
-        (
-            proposal_lens,
-            nonzero_proposal_len_seqs,
-            nonzero_proposal_len_indices,
-        ) = self._split_by_max_model_len(seq_group_metadata_list, proposal_len)
+        with nvtx_range("top1_proposer.split_non_spec_seqs"):
+
+            # Split speculative- and non-speculative- sequences.
+            (
+                proposal_lens,
+                nonzero_proposal_len_seqs,
+                nonzero_proposal_len_indices,
+            ) = self._split_by_max_model_len(seq_group_metadata_list, proposal_len)
 
         if nonzero_proposal_len_seqs:
             # Speculate tokens using the draft worker for the speculative
@@ -78,16 +80,18 @@ class Top1Proposer(SpeculativeProposer):
             maybe_sampler_output = None
             transposed = False
 
-        # Combine speculative- and non-speculative sequences into the same
-        # representation.
-        proposal_tokens, proposal_probs, proposal_lens = self._merge_outputs(
-            batch_size=len(seq_group_metadata_list),
-            proposal_len=proposal_len,
-            maybe_sampler_output=maybe_sampler_output,
-            proposal_lens=proposal_lens,
-            nonzero_proposal_len_indices=nonzero_proposal_len_indices,
-            sampler_transposed=transposed,
-        )
+
+        with nvtx_range("top1_proposer.merge_outputs"):
+            # Combine speculative- and non-speculative sequences into the same
+            # representation.
+            proposal_tokens, proposal_probs, proposal_lens = self._merge_outputs(
+                batch_size=len(seq_group_metadata_list),
+                proposal_len=proposal_len,
+                maybe_sampler_output=maybe_sampler_output,
+                proposal_lens=proposal_lens,
+                nonzero_proposal_len_indices=nonzero_proposal_len_indices,
+                sampler_transposed=transposed,
+            )
 
         proposals = SpeculativeProposals(
             proposal_token_ids=proposal_tokens,

@@ -13,6 +13,8 @@ from vllm.sampling_params import SamplingType
 from vllm.sequence import (Logprob, PromptLogprobs, SampleLogprobs,
                            SamplerOutput, SequenceGroupOutput, SequenceOutput)
 
+from vllm.spec_decode.util import nvtx_range
+
 # (num_token_ids, num_parent_ids) per sequence group.
 SampleResultType = List[Tuple[List[int], List[int]]]
 
@@ -59,62 +61,68 @@ class Sampler(nn.Module):
         assert logits is not None
         _, vocab_size = logits.shape
 
-        logits = _apply_min_tokens_penalty(logits, sampling_metadata)
+        with nvtx_range("sampler.modify_logits"):
 
-        # Prepare sampling tensors with pinned memory to avoid blocking.
-        (sampling_tensors, do_penalties, do_top_p_top_k,
-         do_min_p) = SamplingTensors.from_sampling_metadata(
-             sampling_metadata, vocab_size, logits.device, logits.dtype)
+            logits = _apply_min_tokens_penalty(logits, sampling_metadata)
 
-        # Apply presence and frequency penalties.
-        if do_penalties:
-            logits = _apply_penalties(logits, sampling_tensors.prompt_tokens,
-                                      sampling_tensors.output_tokens,
-                                      sampling_tensors.presence_penalties,
-                                      sampling_tensors.frequency_penalties,
-                                      sampling_tensors.repetition_penalties)
+            # Prepare sampling tensors with pinned memory to avoid blocking.
+            (sampling_tensors, do_penalties, do_top_p_top_k,
+             do_min_p) = SamplingTensors.from_sampling_metadata(
+                 sampling_metadata, vocab_size, logits.device, logits.dtype)
 
-        # Apply temperature scaling.
-        # Use in-place division to avoid creating a new tensor.
-        logits.div_(sampling_tensors.temperatures.unsqueeze_(dim=1))
+            # Apply presence and frequency penalties.
+            if do_penalties:
+                logits = _apply_penalties(logits, sampling_tensors.prompt_tokens,
+                                          sampling_tensors.output_tokens,
+                                          sampling_tensors.presence_penalties,
+                                          sampling_tensors.frequency_penalties,
+                                          sampling_tensors.repetition_penalties)
 
-        if do_top_p_top_k:
-            logits = _apply_top_k_top_p(logits, sampling_tensors.top_ps,
-                                        sampling_tensors.top_ks)
+            # Apply temperature scaling.
+            # Use in-place division to avoid creating a new tensor.
+            logits.div_(sampling_tensors.temperatures.unsqueeze_(dim=1))
 
-        if do_min_p:
-            logits = _apply_min_p(logits, sampling_tensors.min_ps)
+            if do_top_p_top_k:
+                logits = _apply_top_k_top_p(logits, sampling_tensors.top_ps,
+                                            sampling_tensors.top_ks)
 
-        # We use float32 for probabilities and log probabilities.
-        # Compute the probabilities.
-        probs = torch.softmax(logits, dim=-1, dtype=torch.float)
-        # Compute the log probabilities.
-        logprobs = torch.log_softmax(logits, dim=-1, dtype=torch.float)
+            if do_min_p:
+                logits = _apply_min_p(logits, sampling_tensors.min_ps)
 
-        # Sample the next tokens.
-        sample_results, maybe_sampled_tokens_tensor = _sample(
-            probs,
-            logprobs,
-            sampling_metadata,
-            sampling_tensors,
-            include_gpu_probs_tensor=self.include_gpu_probs_tensor,
-            modify_greedy_probs=self._should_modify_greedy_probs_inplace,
-        )
+            # We use float32 for probabilities and log probabilities.
+            # Compute the probabilities.
+            probs = torch.softmax(logits, dim=-1, dtype=torch.float)
+            # Compute the log probabilities.
+            logprobs = torch.log_softmax(logits, dim=-1, dtype=torch.float)
 
-        if self.include_gpu_probs_tensor:
-            assert maybe_sampled_tokens_tensor is not None
-            on_device_tensors = (probs, logprobs, maybe_sampled_tokens_tensor)
-        else:
-            on_device_tensors = None
+        with nvtx_range("sampler.sample_tokens"):
+            # Sample the next tokens.
+            sample_results, maybe_sampled_tokens_tensor = _sample(
+                probs,
+                logprobs,
+                sampling_metadata,
+                sampling_tensors,
+                include_gpu_probs_tensor=self.include_gpu_probs_tensor,
+                modify_greedy_probs=self._should_modify_greedy_probs_inplace,
+            )
 
-        # Get the logprobs query results.
-        prompt_logprobs, sample_logprobs = _get_logprobs(
-            logprobs, sampling_metadata, sample_results)
-        return _build_sampler_output(sample_results,
-                                     sampling_metadata,
-                                     prompt_logprobs,
-                                     sample_logprobs,
-                                     on_device_tensors=on_device_tensors)
+        with nvtx_range("sampler.get_logprobs"):
+            # Get the logprobs query results.
+            prompt_logprobs, sample_logprobs = _get_logprobs(
+                logprobs, sampling_metadata, sample_results)
+        
+        with nvtx_range("sampler.build_sampler_output"):
+            if self.include_gpu_probs_tensor:
+                assert maybe_sampled_tokens_tensor is not None
+                on_device_tensors = (probs, logprobs, maybe_sampled_tokens_tensor)
+            else:
+                on_device_tensors = None
+
+            return _build_sampler_output(sample_results,
+                                         sampling_metadata,
+                                         prompt_logprobs,
+                                         sample_logprobs,
+                                         on_device_tensors=on_device_tensors)
 
     @property
     def _should_modify_greedy_probs_inplace(self) -> bool:

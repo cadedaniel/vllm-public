@@ -7,6 +7,7 @@ from vllm.sequence import (ExecuteModelRequest, SamplerOutput,
                            SequenceGroupMetadata)
 from vllm.spec_decode.interfaces import SpeculativeProposals
 from vllm.spec_decode.top1_proposer import Top1Proposer
+from vllm.spec_decode.util import nvtx_range
 from vllm.worker.worker import Worker
 
 
@@ -55,31 +56,35 @@ class MultiStepWorker(Worker):
 
         For multi step worker, this indicator shall be True.
         """
-        self._raise_if_unsupported(execute_model_req)
 
-        # Shallow copy input data so modifications (such as appending tokens)
-        # do not cause side-effects.
-        copied_seq_group_metadata_list = self._shallow_copy_inputs(
-            execute_model_req.seq_group_metadata_list)
-        copied_execute_model_req = execute_model_req.clone(
-            copied_seq_group_metadata_list)
+        with nvtx_range("multi_step_worker.prepare"):
+            self._raise_if_unsupported(execute_model_req)
 
-        # Assert enough KV space for sample_len tokens per sequence.
-        self._assert_enough_kv_space(execute_model_req.seq_group_metadata_list,
-                                     sample_len)
+            # Shallow copy input data so modifications (such as appending tokens)
+            # do not cause side-effects.
+            copied_seq_group_metadata_list = self._shallow_copy_inputs(
+                execute_model_req.seq_group_metadata_list)
+            copied_execute_model_req = execute_model_req.clone(
+                copied_seq_group_metadata_list)
+
+            # Assert enough KV space for sample_len tokens per sequence.
+            self._assert_enough_kv_space(execute_model_req.seq_group_metadata_list,
+                                         sample_len)
 
         # Run model sample_len times.
         model_outputs = []
         for _ in range(sample_len):
-            model_output = super().execute_model(
-                execute_model_req=copied_execute_model_req)
-            assert (len(model_output) == 1
-                    ), "composing multistep workers not supported"
-            model_output = model_output[0]
+            with nvtx_range("multi_step_worker.execute_model"):
+                model_output = super().execute_model(
+                    execute_model_req=copied_execute_model_req)
+                assert (len(model_output) == 1
+                        ), "composing multistep workers not supported"
+                model_output = model_output[0]
 
-            self._append_new_tokens(model_output,
-                                    copied_seq_group_metadata_list)
-            model_outputs.append(model_output)
+            with nvtx_range("multi_step_worker.append_new_tokens"):
+                self._append_new_tokens(model_output,
+                                        copied_seq_group_metadata_list)
+                model_outputs.append(model_output)
 
         return model_outputs, True
 

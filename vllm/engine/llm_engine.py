@@ -581,7 +581,10 @@ class LLMEngine:
             >>>     if not (engine.has_unfinished_requests() or example_inputs):
             >>>         break
         """
-        seq_group_metadata_list, scheduler_outputs = self.scheduler.schedule()
+        from vllm.spec_decode.util import nvtx_range
+
+        with nvtx_range("engine.scheduler"):
+            seq_group_metadata_list, scheduler_outputs = self.scheduler.schedule()
 
         if not scheduler_outputs.is_empty():
             execute_model_req = ExecuteModelRequest(
@@ -592,17 +595,20 @@ class LLMEngine:
                 num_lookahead_slots=scheduler_outputs.num_lookahead_slots,
                 running_queue_size=scheduler_outputs.running_queue_size,
             )
-            output = self.model_executor.execute_model(
-                execute_model_req=execute_model_req)
+            with nvtx_range("engine.execute_model"):
+                output = self.model_executor.execute_model(
+                    execute_model_req=execute_model_req)
         else:
             output = []
 
-        request_outputs = self._process_model_outputs(
-            output, scheduler_outputs.scheduled_seq_groups,
-            scheduler_outputs.ignored_seq_groups, seq_group_metadata_list)
+        with nvtx_range("engine.process_model_outputs"):
+            request_outputs = self._process_model_outputs(
+                output, scheduler_outputs.scheduled_seq_groups,
+                scheduler_outputs.ignored_seq_groups, seq_group_metadata_list)
 
-        # Log stats.
-        self.do_log_stats(scheduler_outputs, output)
+        with nvtx_range("engine.log_stats"):
+            # Log stats.
+            self.do_log_stats(scheduler_outputs, output)
 
         return request_outputs
 
