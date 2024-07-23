@@ -353,6 +353,7 @@ class SpecDecodeWorker(LoraNotSupportedWorkerBase):
     ) -> List[SamplerOutput]:
         """Perform speculative decoding on the input batch.
         """
+        assert False, "non-spmd path"
         if self.rank != self._driver_rank:
             self._run_non_driver_rank()
             return []

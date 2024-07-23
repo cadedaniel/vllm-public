@@ -1,17 +1,19 @@
 [
     {
-        "test_name": "serving_llama8B_tp1_sharegpt",
-        "qps_list": [1, 4, 16, "inf"],
+        "test_name": "serving_spec_decode_tp8_k3",
+        "qps_list": [8, 4, 2, 1, 0.5],
         "server_parameters": {
-            "model": "meta-llama/Meta-Llama-3-8B",
-            "tensor_parallel_size": 1,
-            "swap_space": 16,
-            "disable_log_stats": "",
+            "model": "meta-llama/Llama-2-70b-chat-hf",
             "disable_log_requests": "",
-            "load_format": "dummy"
+            "tensor_parallel_size": 8,
+            "swap_space": 16,
+            "speculative_model": "/mnt/local_storage/custom_models/xwjiang-82m",
+            "num_speculative_tokens": 3,
+            "speculative_draft_tensor_parallel_size": 1,
+            "use_v2_block_manager": ""
         },
         "client_parameters": {
-            "model": "meta-llama/Meta-Llama-3-8B",
+            "model": "meta-llama/Llama-2-70b-chat-hf",
             "backend": "vllm",
             "dataset_name": "sharegpt",
             "dataset_path": "./ShareGPT_V3_unfiltered_cleaned_split.json",
@@ -19,18 +21,100 @@
         }
     },
     {
-        "test_name": "serving_llama70B_tp4_sharegpt",
-        "qps_list": [1, 4, 16, "inf"],
+        "test_name": "serving_spec_decode_tp8_k4",
+        "qps_list": [8, 4, 2, 1, 0.5],
         "server_parameters": {
-            "model": "meta-llama/Meta-Llama-3-70B-Instruct",
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "disable_log_requests": "",
+            "tensor_parallel_size": 8,
+            "swap_space": 16,
+            "speculative_model": "/mnt/local_storage/custom_models/xwjiang-82m",
+            "num_speculative_tokens": 4,
+            "speculative_draft_tensor_parallel_size": 1,
+            "use_v2_block_manager": ""
+        },
+        "client_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "backend": "vllm",
+            "dataset_name": "sharegpt",
+            "dataset_path": "./ShareGPT_V3_unfiltered_cleaned_split.json",
+            "num_prompts": 200
+        }
+    },
+    {
+        "test_name": "serving_spec_decode_tp8_k1",
+        "qps_list": [8, 4, 2, 1, 0.5],
+        "server_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "disable_log_requests": "",
+            "tensor_parallel_size": 8,
+            "swap_space": 16,
+            "speculative_model": "/mnt/local_storage/custom_models/xwjiang-82m",
+            "num_speculative_tokens": 1,
+            "speculative_draft_tensor_parallel_size": 1,
+            "use_v2_block_manager": ""
+        },
+        "client_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "backend": "vllm",
+            "dataset_name": "sharegpt",
+            "dataset_path": "./ShareGPT_V3_unfiltered_cleaned_split.json",
+            "num_prompts": 200
+        }
+    },
+    {
+        "test_name": "serving_spec_decode_tp8_k2",
+        "qps_list": [8, 4, 2, 1, 0.5],
+        "server_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "disable_log_requests": "",
+            "tensor_parallel_size": 8,
+            "swap_space": 16,
+            "speculative_model": "/mnt/local_storage/custom_models/xwjiang-82m",
+            "num_speculative_tokens": 2,
+            "speculative_draft_tensor_parallel_size": 1,
+            "use_v2_block_manager": ""
+        },
+        "client_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "backend": "vllm",
+            "dataset_name": "sharegpt",
+            "dataset_path": "./ShareGPT_V3_unfiltered_cleaned_split.json",
+            "num_prompts": 200
+        }
+    },
+    {
+        "test_name": "serving_spec_decode_tp8_baseline",
+        "qps_list": [8, 4, 2, 1, 0.5],
+        "server_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "disable_log_requests": "",
+            "tensor_parallel_size": 8,
+            "swap_space": 16
+        },
+        "client_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "backend": "vllm",
+            "dataset_name": "sharegpt",
+            "dataset_path": "./ShareGPT_V3_unfiltered_cleaned_split.json",
+            "num_prompts": 200
+        }
+    },
+    {
+        "test_name": "serving_spec_decode_tp4_k1",
+        "qps_list": [8, 4, 2, 1, 0.5],
+        "server_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "disable_log_requests": "",
             "tensor_parallel_size": 4,
             "swap_space": 16,
-            "disable_log_stats": "",
-            "disable_log_requests": "",
-            "load_format": "dummy"
+            "speculative_model": "/mnt/local_storage/custom_models/xwjiang-82m",
+            "num_speculative_tokens": 1,
+            "speculative_draft_tensor_parallel_size": 1,
+            "use_v2_block_manager": ""
         },
         "client_parameters": {
-            "model": "meta-llama/Meta-Llama-3-70B-Instruct",
+            "model": "meta-llama/Llama-2-70b-chat-hf",
             "backend": "vllm",
             "dataset_name": "sharegpt",
             "dataset_path": "./ShareGPT_V3_unfiltered_cleaned_split.json",
@@ -38,18 +122,79 @@
         }
     },
     {
-        "test_name": "serving_mixtral8x7B_tp2_sharegpt",
-        "qps_list": [1, 4, 16, "inf"],
+        "test_name": "serving_spec_decode_tp4_k2",
+        "qps_list": [8, 4, 2, 1, 0.5],
         "server_parameters": {
-            "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
-            "tensor_parallel_size": 2,
-            "swap_space": 16,
-            "disable_log_stats": "",
+            "model": "meta-llama/Llama-2-70b-chat-hf",
             "disable_log_requests": "",
-            "load_format": "dummy"
+            "tensor_parallel_size": 4,
+            "swap_space": 16,
+            "speculative_model": "/mnt/local_storage/custom_models/xwjiang-82m",
+            "num_speculative_tokens": 2,
+            "speculative_draft_tensor_parallel_size": 1,
+            "use_v2_block_manager": ""
         },
         "client_parameters": {
-            "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "backend": "vllm",
+            "dataset_name": "sharegpt",
+            "dataset_path": "./ShareGPT_V3_unfiltered_cleaned_split.json",
+            "num_prompts": 200
+        }
+    },
+    {
+        "test_name": "serving_spec_decode_tp4_k3",
+        "qps_list": [8, 4, 2, 1, 0.5],
+        "server_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "disable_log_requests": "",
+            "tensor_parallel_size": 4,
+            "swap_space": 16,
+            "speculative_model": "/mnt/local_storage/custom_models/xwjiang-82m",
+            "num_speculative_tokens": 3,
+            "speculative_draft_tensor_parallel_size": 1,
+            "use_v2_block_manager": ""
+        },
+        "client_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "backend": "vllm",
+            "dataset_name": "sharegpt",
+            "dataset_path": "./ShareGPT_V3_unfiltered_cleaned_split.json",
+            "num_prompts": 200
+        }
+    },
+    {
+        "test_name": "serving_spec_decode_tp4_k4",
+        "qps_list": [8, 4, 2, 1, 0.5],
+        "server_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "disable_log_requests": "",
+            "tensor_parallel_size": 4,
+            "swap_space": 16,
+            "speculative_model": "/mnt/local_storage/custom_models/xwjiang-82m",
+            "num_speculative_tokens": 4,
+            "speculative_draft_tensor_parallel_size": 1,
+            "use_v2_block_manager": ""
+        },
+        "client_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "backend": "vllm",
+            "dataset_name": "sharegpt",
+            "dataset_path": "./ShareGPT_V3_unfiltered_cleaned_split.json",
+            "num_prompts": 200
+        }
+    },
+    {
+        "test_name": "serving_spec_decode_tp4_baseline",
+        "qps_list": [8, 4, 2, 1, 0.5],
+        "server_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
+            "disable_log_requests": "",
+            "tensor_parallel_size": 4,
+            "swap_space": 16
+        },
+        "client_parameters": {
+            "model": "meta-llama/Llama-2-70b-chat-hf",
             "backend": "vllm",
             "dataset_name": "sharegpt",
             "dataset_path": "./ShareGPT_V3_unfiltered_cleaned_split.json",

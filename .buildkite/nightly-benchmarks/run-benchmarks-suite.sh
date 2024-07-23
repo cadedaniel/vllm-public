@@ -75,8 +75,8 @@ kill_gpu_processes() {
 
   # Sometimes kill with pid doesn't work properly, we can also kill all process running python or python3
   # since we are in container anyway
-  pkill -9 -f python
-  pkill -9 -f python3
+  #pkill -9 -f python
+  #pkill -9 -f python3
 
   # waiting for GPU processes to be fully killed
   # loop while nvidia-smi returns any processes
@@ -355,22 +355,31 @@ main() {
 
   # prepare for benchmarking
   cd benchmarks || exit 1
-  wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
+  FILE=ShareGPT_V3_unfiltered_cleaned_split.json
+  if [ ! -f "$FILE" ]; then
+      wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/$FILE
+  else
+      echo "$FILE already exists."
+  fi
+  #wget https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
   declare -g RESULTS_FOLDER=results/
   mkdir -p $RESULTS_FOLDER
   QUICK_BENCHMARK_ROOT=../.buildkite/nightly-benchmarks/
 
+  export VLLM_USE_RAY_SPMD_WORKER=1
+  export VLLM_USE_RAY_COMPILED_DAG=1
+
   # benchmarking
   run_serving_tests $QUICK_BENCHMARK_ROOT/tests/serving-tests.json
-  run_latency_tests $QUICK_BENCHMARK_ROOT/tests/latency-tests.json
-  run_throughput_tests $QUICK_BENCHMARK_ROOT/tests/throughput-tests.json
+  #run_latency_tests $QUICK_BENCHMARK_ROOT/tests/latency-tests.json
+  #run_throughput_tests $QUICK_BENCHMARK_ROOT/tests/throughput-tests.json
 
 
   # postprocess benchmarking results
   pip install tabulate pandas
   python3 $QUICK_BENCHMARK_ROOT/scripts/convert-results-json-to-markdown.py
 
-  upload_to_buildkite
+  #upload_to_buildkite
 }
 
 main "$@"
