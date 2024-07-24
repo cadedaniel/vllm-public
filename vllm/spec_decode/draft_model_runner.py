@@ -27,7 +27,7 @@ logger = init_logger(__name__)
 debug_advance_input = False
 # A flag to allow GPU advance step for draft model runner.
 # Set to False for debugging.
-allow_gpu_advance_step = True
+allow_gpu_advance_step = False
 
 
 class TP1DraftModelRunner(ModelRunner):

@@ -368,12 +368,12 @@ main() {
 
   export VLLM_USE_RAY_SPMD_WORKER=1
   export VLLM_USE_RAY_COMPILED_DAG=1
+  export RAY_DEDUP_LOGS=0
 
   # benchmarking
   run_serving_tests $QUICK_BENCHMARK_ROOT/tests/serving-tests.json
   #run_latency_tests $QUICK_BENCHMARK_ROOT/tests/latency-tests.json
   #run_throughput_tests $QUICK_BENCHMARK_ROOT/tests/throughput-tests.json
-
 
   # postprocess benchmarking results
   pip install tabulate pandas

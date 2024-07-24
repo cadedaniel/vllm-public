@@ -409,6 +409,7 @@ class RayGPUExecutorAsync(RayGPUExecutor, DistributedGPUExecutorAsync):
         if not self.use_ray_compiled_dag:
             self.driver_exec_method = make_async(
                 self.driver_worker.execute_method)
+        print(f'Started RayGPUExecutorAsync {self.use_ray_spmd_worker=} {self.use_ray_compiled_dag=}')
 
     async def execute_model_async(
             self,

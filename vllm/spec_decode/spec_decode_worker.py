@@ -219,6 +219,9 @@ class SpecDecodeWorker(LoraNotSupportedWorkerBase):
         self._metrics = AsyncMetricsCollector(
             self.spec_decode_sampler
         ) if metrics_collector is None else metrics_collector
+
+        self._iteration = -1
+
         # Tracks the sequence IDs that received a bonus token ID in
         # their last forward pass. Needed only if KV cache is being
         # used for token generation such as in the case of MultiStepWorker.
@@ -318,11 +321,19 @@ class SpecDecodeWorker(LoraNotSupportedWorkerBase):
 
     @torch.inference_mode()
     def _execute_model_spmd(self, execute_model_req: ExecuteModelRequest, ) -> List[SamplerOutput]:
+        self._iteration += 1
+        print(f'{self.rank=} {self._iteration=} _execute_model_spmd start k={execute_model_req.num_lookahead_slots} bs={len(execute_model_req.seq_group_metadata_list)}')
+
+        if self.rank == 0 and self._iteration == 71:
+            pass
+            #breakpoint()
 
         # Workaround for other ranks not running sampler.
         if self.rank != self._driver_rank:
             self._run_non_driver_rank_spmd(execute_model_req.num_lookahead_slots)
+            print(f'{self.rank=} {self._iteration=} _execute_model_spmd end (non-driver)')
             return []
+
 
         # TODO how to handle shutdown? need to signal to workers that we're done.
         # in non-spmd case this is None execute_model_req
@@ -340,11 +351,20 @@ class SpecDecodeWorker(LoraNotSupportedWorkerBase):
         if num_lookahead_slots == 0 or len(
                 execute_model_req.seq_group_metadata_list
         ) == 0 or disable_all_speculation:
-            return self._run_no_spec(execute_model_req,
+            rval = self._run_no_spec(execute_model_req,
                                      skip_proposer=disable_all_speculation)
+            print(f'{self.rank=} {self._iteration=} _execute_model_spmd end (no spec)')
+            return rval
 
-        return self._run_speculative_decoding_step(execute_model_req,
-                                                   num_lookahead_slots)
+        try:
+            rval = self._run_speculative_decoding_step(execute_model_req,
+                                                       num_lookahead_slots)
+        except AssertionError as e:
+            print(f'run spec decode step got {e=}')
+            breakpoint()
+            raise
+        print(f'{self.rank=} {self._iteration=} _execute_model_spmd end (spec)')
+        return rval
 
     @torch.inference_mode()
     def execute_model(
@@ -486,7 +506,7 @@ class SpecDecodeWorker(LoraNotSupportedWorkerBase):
             self.proposer_worker.execute_model(execute_model_req)
 
         sampler_output = self.scorer_worker.execute_model(execute_model_req)
-        print(f'{self.rank=} {len(sampler_output)=}')
+        print(f'{self.rank=} {self._iteration=} {len(sampler_output)=}')
 
         # TODO: sampler output is empty on rank!=0.
         # Because we don't run sampler on all ranks ..

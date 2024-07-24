@@ -45,6 +45,7 @@ class ExecutorBase(ABC):
         self.prompt_adapter_config = prompt_adapter_config
 
         self._init_executor()
+        print(f'_init_executor done, {self.uses_ray=} {self=}')
 
     @abstractmethod
     def _init_executor(self) -> None:
