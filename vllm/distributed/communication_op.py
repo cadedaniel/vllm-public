@@ -27,6 +27,12 @@ def tensor_model_parallel_gather(input_: torch.Tensor,
 def broadcast_tensor_dict(tensor_dict: Optional[Dict[Any, Union[torch.Tensor,
                                                                 Any]]] = None,
                           src: int = 0):
+    import os
+    # Always throw here so we catch performance issues.
+    print(f'broadcast_tensor_dict called')
+    if os.getenv("CADE_DISABLE_THROW_IN_BROADCAST_TENSOR_DICT", "0") != "1":
+        raise ValueError("broadcast_tensor_dict called")
+
     if not torch.distributed.is_initialized():
         return tensor_dict
     return get_tp_group().broadcast_tensor_dict(tensor_dict, src)
