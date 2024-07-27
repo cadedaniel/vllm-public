@@ -1,13 +1,17 @@
 [
     {
-        "test_name": "serving_spec_decode_tp8_baseline",
+        "test_name": "serving_spec_decode_tp8_k3",
         "qps_list": [8, 4, 2, 1, 0.5],
         "server_parameters": {
             "model": "meta-llama/Llama-2-70b-chat-hf",
             "disable_log_requests": "",
             "tensor_parallel_size": 8,
+            "swap_space": 16,
+            "speculative_model": "/mnt/local_storage/custom_models/xwjiang-82m",
+            "num_speculative_tokens": 3,
+            "speculative_draft_tensor_parallel_size": 1,
             "distributed_executor_backend": "ray",
-            "swap_space": 16
+            "use_v2_block_manager": ""
         },
         "client_parameters": {
             "model": "meta-llama/Llama-2-70b-chat-hf",
