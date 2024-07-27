@@ -53,9 +53,9 @@ json2args() {
 wait_for_server() {
   # wait for vllm server to start
   # return 1 if vllm server crashes
-  timeout 1200 bash -c '
+  timeout 120 bash -c '
     until curl -X POST localhost:8000/v1/completions; do
-      sleep 1
+      sleep 5
     done' && return 0 || return 1
 }
 
